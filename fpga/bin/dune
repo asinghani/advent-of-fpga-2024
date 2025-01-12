@@ -1,0 +1,13 @@
+(executable
+ (name build)
+ (modules build)
+ (libraries core core_unix.command_unix advent_of_fpga)
+ (preprocess
+  (pps ppx_jane)))
+
+(executable
+ (name control)
+ (modules control)
+ (libraries core core_unix.command_unix advent_of_fpga)
+ (preprocess
+  (pps ppx_jane)))

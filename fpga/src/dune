@@ -1,0 +1,13 @@
+(library
+ (name advent_of_fpga)
+ (libraries
+  async
+  core
+  core_unix
+  hardcaml
+  hardcaml_circuits
+  advent_of_fpga_input_parser)
+ (inline_tests)
+ (preprocessor_deps constraints.lpf ../uart_wrapper.py)
+ (preprocess
+  (pps ppx_jane ppx_hardcaml ppx_embed_file)))

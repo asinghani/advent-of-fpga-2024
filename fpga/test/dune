@@ -1,0 +1,13 @@
+(library
+ (name advent_of_fpga_test)
+ (libraries
+  async
+  core
+  core_unix
+  hardcaml
+  hardcaml_waveterm
+  advent_of_fpga
+  advent_of_fpga_input_parser)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane ppx_hardcaml)))
