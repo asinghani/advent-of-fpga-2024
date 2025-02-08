@@ -9,6 +9,8 @@ let accum_bits = 64
 let operand_bits = 10
 let max_seq_len = 13
 
+(* Pack the operand together with the number of digits in the operand, to
+   simplify the "concatenate" operation later *)
 module Operand = struct
   type 'a t =
     { value : 'a [@bits operand_bits]
@@ -16,6 +18,8 @@ module Operand = struct
     }
   [@@deriving hardcaml ~rtlmangle:"$"]
 
+  (* Compute the number of digits in the operand and pack it together with the
+     value itself *)
   let make value =
     let value = uresize ~width:operand_bits value in
     let digits =
@@ -29,6 +33,8 @@ module Operand = struct
   let none = Of_signal.of_int 0
 end
 
+(* Enum for the allowed operators, along with Nop which is used to pad the end
+   of a sequence *)
 module Operator = struct
   module Cases = struct
     type t =
@@ -55,6 +61,8 @@ module States = struct
   [@@deriving sexp_of, compare, enumerate]
 end
 
+(* Each stage of the pipeline contains the current accumulator, the goal value,
+   and the remaining operands and operators *)
 module Pipeline_state = struct
   type 'a t =
     { valid : 'a
@@ -79,12 +87,15 @@ let pow10 x =
   mux_init x (1 lsl width x) ~f:(fun x -> of_unsigned_int ~width:max_width (Int.pow 10 x))
 ;;
 
+(* Make a single pipeline stage which takes a Pipeline_state.t as input and
+   returns the next Pipeline_state.t as output. *)
 let make_pipeline_stage ~spec scope (input : _ Pipeline_state.t) =
   let naming_op = Scope.naming scope in
   let%tydi { valid; accum; goal; operands; operators } =
     Pipeline_state.Of_signal.apply_names ~naming_op ~prefix:"input$" input
   in
   let operand = List.hd_exn operands in
+  (* If the operand is empty, the operation should always be a Nop *)
   let operator =
     Operator.Of_signal.(
       mux2 (operand.digits ==:. 0) (of_enum Nop) (List.hd_exn operators))
@@ -99,6 +110,7 @@ let make_pipeline_stage ~spec scope (input : _ Pipeline_state.t) =
     |> List.map ~f:(Tuple2.map_snd ~f:(reg spec))
     |> List.map ~f:(Tuple2.map_snd ~f:does_result_overflow)
   in
+  (* Mux the results for each operator based on the currently selected operator *)
   let accum_new =
     Operator.Of_signal.match_
       operator
@@ -109,22 +121,26 @@ let make_pipeline_stage ~spec scope (input : _ Pipeline_state.t) =
       operator
       (accum_mux |> List.map ~f:(Tuple2.map_snd ~f:Tuple2.get2))
   in
-  (* Some hacky stuff to line up the pipeline with the cycles taken to calculate the operation result *)
+  (* Line up the pipeline with the cycles taken to calculate the operation result *)
   { Pipeline_state.valid = pipeline spec ~n:accum_pipeline_cycles valid &: ~:overflow
   ; accum = accum_new
-  ; goal = goal |> pipeline spec ~n:accum_pipeline_cycles
+  ; goal =
+      goal |> pipeline spec ~n:accum_pipeline_cycles
+      (* For the next stage, output the remaining operators and operands, dropping
+         the one we just used *)
   ; operands =
       List.tl_exn operands @ [ Operand.none ]
       |> List.map ~f:(Operand.Of_signal.pipeline spec ~n:accum_pipeline_cycles)
   ; operators =
       List.tl_exn operators @ [ Operator.Of_signal.of_enum Nop ]
       |> List.map ~f:(Operator.Of_signal.pipeline spec ~n:accum_pipeline_cycles)
+      (* Output the remaining operands and operators, dropping the one we just used *)
   }
   |> Pipeline_state.Of_signal.apply_names ~naming_op ~prefix:"output$"
   |> Pipeline_state.Of_signal.reg spec
-  |> Pipeline_state.Of_signal.reg spec
 ;;
 
+(* Recursively build the full pipeline *)
 let rec make_pipeline ?(n = max_seq_len) ~spec scope input =
   match n with
   | 0 -> input
@@ -133,6 +149,7 @@ let rec make_pipeline ?(n = max_seq_len) ~spec scope input =
     make_pipeline ~n:(n - 1) ~spec scope (make_pipeline_stage ~spec subscope input)
 ;;
 
+(* Base-N counter *)
 let rec n_ary_counter ~n values =
   if List.is_empty values
   then []

@@ -1,3 +1,6 @@
+(** Module type for each inner user design to implement to be integrated into
+    the board wrapper. *)
+
 open! Core
 open! Hardcaml
 

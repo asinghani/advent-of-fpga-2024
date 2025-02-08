@@ -6,6 +6,7 @@ let clock_freq = Ulx3s.Clock_freq.Clock_25mhz
 let uart_fifo_depth = 32
 let extra_synth_args = []
 
+(* Check if a subset of the shift register matches the given string *)
 let matches_string list string =
   let list = List.slice list 0 (String.length string) in
   let chars = String.to_list string in
@@ -23,6 +24,7 @@ let create
   : _ Ulx3s.O.t
   =
   let spec = Reg_spec.create ~clock ~clear () in
+  (* The longest string we might want to look for in the shift register *)
   let lookback_len_chars = String.length "mul(AAA,BBB)" in
   (* Flush the shift register at the end to handle all of the values *)
   let flush_cycles = 16 in
@@ -38,6 +40,8 @@ let create
       drop_top ~width:8 x @: byte_in)
   in
   let shreg = shreg |> split_msb ~exact:true ~part_width:8 in
+  (* For part 2, look for the strings "do()" and "don't()" and use them to
+     enable/disable accumulating for part 2 *)
   let%hw is_do = matches_string shreg "do()" in
   let%hw is_don't = matches_string shreg "don't()" in
   let%hw is_maybe_mul = matches_string shreg "mul(" in
@@ -45,6 +49,9 @@ let create
     reg_fb spec ~width:1 ~clear_to:vdd ~f:(fun x ->
       mux2 is_do vdd @@ mux2 is_don't gnd @@ x)
   in
+  (* For each possible length of digits (A = 1-3 digits, B = 1-3 digits), try
+     to match against the string "mul(AAA,BBB)". Because we check the ")" at
+     the end, only one length will ever match *)
   let%tydi { valid; value } =
     List.init 3 ~f:(fun alen ->
       let alen = alen + 1 in
@@ -58,6 +65,7 @@ let create
           List.init (3 - blen) ~f:(fun _ -> of_char '0')
           @ List.slice shreg (4 + 1 + alen) (4 + 1 + alen + blen)
         in
+        (* Check that the string matches what we expect *)
         let comma = List.nth_exn shreg (4 + alen) in
         let paren = List.nth_exn shreg (4 + 1 + alen + blen) in
         let conditions =
@@ -72,6 +80,7 @@ let create
             ]
         in
         let valid = reduce ~f:( &: ) conditions |> pipeline ~n:2 spec in
+        (* Convert the string "XYZ" into an integer by calculating 100*X + 10*Y + Z *)
         let a =
           List.fold a_chars ~init:(of_int ~width:8 0) ~f:(fun acc x ->
             Uop.((acc *: of_int ~width:4 10) +: of_numeral x))

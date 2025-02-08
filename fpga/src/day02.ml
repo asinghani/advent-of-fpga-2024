@@ -8,9 +8,12 @@ let extra_synth_args = []
 let reading_bits = 8
 let max_num_readings = 8
 
+(* Generate a circuit that (in parallel) compares every pair of adjacent
+   readings, and then uses a tree to reduce the comparisons down to a
+   valid/invalid result. *)
 let reports_are_valid_helper ~clock ~clear ~readings_list ~readings_list_valid =
   let spec = Reg_spec.create ~clock ~clear () in
-  (* Every pair of adjacent elements *)
+  (* Zip together every pair of adjacent elements *)
   let pairs_to_check =
     List.zip_exn (List.drop_last_exn readings_list) (List.tl_exn readings_list)
   in
@@ -22,6 +25,8 @@ let reports_are_valid_helper ~clock ~clear ~readings_list ~readings_list_valid =
   |> reg spec
 ;;
 
+(* Do the same check both backwards and forwards, as the list is allowed to be
+   monotonically increasing _or_ monotonically decreasing. *)
 let reports_are_valid ~clock ~clear ~readings_list ~readings_list_valid =
   reports_are_valid_helper ~clock ~clear ~readings_list ~readings_list_valid
   |: reports_are_valid_helper
@@ -31,10 +36,16 @@ let reports_are_valid ~clock ~clear ~readings_list ~readings_list_valid =
        ~readings_list_valid
 ;;
 
+(* Take a list of length N, and return N lists of length N-1, each with one
+   element removed (for the "reading is valid with one element removed" check) *)
 let remove_each_element list =
   List.init (List.length list) ~f:(fun i -> List.filteri list ~f:(fun j _ -> i <> j))
 ;;
 
+(* In parallel, apply the validity checking to each variant of the report (with
+   one element removed) to check if any of them are valid. We rely on the
+   synthesizer to share the majority of the comparisons between elements, and
+   validate that it does not generate large numbers of redundant comparisons. *)
 let reports_are_valid_with_one_each_removed
   ~clock
   ~clear

@@ -3,6 +3,8 @@ open! Hardcaml
 open! Signal
 module Byte_with_valid : Interface.S with type 'a t = 'a With_valid.t
 
+(** Simple UART transciever with build-time configurability and built-in RX and
+    TX FIFOs *)
 module Make (Config : sig
     val baud : int
     val clock_freq_hz : int

@@ -36,6 +36,7 @@ module Make (Design : Ulx3s.Design) = struct
       match Design.clock_freq with
       | Clock_25mhz -> i.clock25
     in
+    (* Synchronize inputs and wrap the UART for the user design to use *)
     let sync_input x = pipeline (Reg_spec.create ~clock ()) ~n:3 x in
     let btn = sync_input i.btn in
     let clear_btn = ~:(btn.:(0)) in

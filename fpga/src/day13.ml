@@ -36,7 +36,8 @@ module States = struct
   [@@deriving sexp_of, compare, enumerate]
 end
 
-(* TODO: figure out why this works *)
+(* TODO: this is a workaround to a small bug in the divider module while I fix
+   the upstream divider *)
 let fixup_div
   ~spec
   ({ quotient; remainder; valid } : _ Divider.O.t)
@@ -175,6 +176,8 @@ let create
           , [ after_n_clocks ~n:10 [ sm.set_next Divide_pt1; start_divide <-- vdd ] ] )
         ; ( Divide_pt1
           , [ when_ (div_a.valid &: div_b.valid) [ sm.set_next Accumulate_pt1 ] ] )
+          (* If the division has no remainder (revealing the existence of a valid
+             integer solution), then add it to the result accumulator *)
         ; ( Accumulate_pt1
           , [ when_
                 (div_a.remainder
@@ -200,6 +203,8 @@ let create
           , [ after_n_clocks ~n:15 [ sm.set_next Divide_pt2; start_divide <-- vdd ] ] )
         ; ( Divide_pt2
           , [ when_ (div_a.valid &: div_b.valid) [ sm.set_next Accumulate_pt2 ] ] )
+          (* If the division has no remainder (revealing the existence of a valid
+             integer solution), then add it to the result accumulator *)
         ; ( Accumulate_pt2
           , [ when_
                 (div_a.remainder

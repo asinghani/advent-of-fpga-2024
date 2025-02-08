@@ -1,6 +1,8 @@
 open! Core
 open! Hardcaml
 
+(** Block RAM with an extra multiplexed write port, which can be used to load
+    initial inputs into the RAM and then disabled once the data is loaded. *)
 module Make (Config : sig
     val width : int
     val depth : int

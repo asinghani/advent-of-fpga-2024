@@ -39,6 +39,8 @@ module Loader = struct
     let word_in = Util.shift_in ~clock ~clear ~n:4 uart_rx in
     let counter = reg_fb spec ~width:13 ~enable:word_in.valid ~f:(fun x -> x +:. 1) in
     let index = msbs counter in
+    (* Load the inputted values (32-bit little-endian) into the two RAMs, one
+       for each column (alternating between them) *)
     { load_finished = uart_rts
     ; ram_write =
         [| { address = index
@@ -119,7 +121,9 @@ let algo
                 ; counter_outer <--. 0
                 ]
             ] )
-          (* Bubble sort *)
+          (* Bubble-sort the values by reading from each RAM, then on the
+             subsequent cycle, comparing them and writing back to the same
+             addresses in the RAM. *)
         ; Sorting_read, [ sm.set_next Sorting_write ]
         ; ( Sorting_write
           , [ sm.set_next Sorting_read
@@ -136,6 +140,7 @@ let algo
                     [ counter_outer <--. 0; sm.set_next Summing ]
                 ]
             ] )
+          (* For part 1, read each list and add the differences to an accumulator *)
         ; ( Summing
           , [ part1_accum_enable <-- vdd
             ; counter_inner0 <-- counter_inner0.value +:. 1
@@ -144,6 +149,8 @@ let algo
                 (counter_inner0.value ==: data_length -:. 1)
                 [ counter_inner0 <--. 0; counter_inner1 <--. 0; sm.set_next Read_part2 ]
             ] )
+          (* For each item in the first list, iterate over the second list and
+             count the number of occurrences *)
         ; Read_part2, [ sm.set_next Searching_part2; incr counter_inner1 ]
         ; ( Searching_part2
           , [ when_ (read_data0.(0) ==: read_data1.(0)) [ incr match_count ]

@@ -1,8 +1,8 @@
 # Advent of FPGA 2024
 
-An attempt at completing 2024's Advent of Code problems in the form of synthesizable FPGA designs.
+My attempt at completing 2024's Advent of Code problems in the form of synthesizable FPGA designs.
 
-I started this fairly late into December (and spent a while setting up the board wrapper and input/output logic), so I've only completed 8 days by the end of the month (more to come soon).
+I started this fairly late into December (and had to set up board infrastructure for the ULX3S), so I've only completed 8 days by the end of the month (more to come soon).
 
 ## Repo Structure
 
@@ -19,11 +19,11 @@ I started this fairly late into December (and spent a while setting up the board
 
 ## Implementation
 
-Hardcaml is used for the design, since its type system and generative capabilities make some days' implementations (i.e. day 7) much cleaner.
+I chose to use Hardcaml for the design, since its strong type system and ability to generate complex designs (especially the access to recursion and functional operations over lists) make many days' implementations much cleaner.
 
-The target FPGA platform is a ULX3S with the ECP5-85K (mostly for the quick compile times and relatively limited resources, making some designs more interesting).
+I targetted the ULX3S FPGA platform  with the ECP5-85K (mostly for the quick compile times and relatively limited resources, making some designs more interesting).
 
-Some days' inputs are preprocessed by using a regex to extract all integers and converting them to 32-bit or 64-bit little-endian values, to avoid needing unique string parsing logic for every day's design.
+Most of the inputs inputs are preprocessed by using a regex to extract all integers and converting them to 32-bit or 64-bit little-endian values, to avoid needing unique string parsing logic in the hardeare. Aside from the preprocessing, all computations (including printing the output in base-10) are done in the FPGA.
 
 ### Board Wrapper
 

@@ -24,10 +24,11 @@ let rec make_shreg ~n ~spec ~enable signal =
   | _ -> signal :: make_shreg ~n:(n - 1) ~spec ~enable (reg spec ~enable signal)
 ;;
 
-(* Mux with a register between each level of the mux tree. Incredibly
-   inefficient but this design is very routing constrained on the tiny ECP5
-   since we support any arbitrary grid width which requires a very wide
-   multiplexer to do in a streaming fashion. *)
+(* Mux with a register between each level of the mux tree. This is incredibly
+   inefficient but is the only good way to allow supporting any arbitrary width
+   of a grid (which requires a very wide multiplexer to do in a streaming
+   fashion), while still managing to fit on the ECP5's constrained routing
+   resources. *)
 let rec recursive_mux ~spec ~sel list =
   let _ = spec in
   assert (List.length list = 1 lsl width sel);
@@ -43,19 +44,30 @@ let rec recursive_mux ~spec ~sel list =
      | _ -> failwith "unreachable")
 ;;
 
+(* Higher-order function for implementing a sliding window convolution. Takes
+   the input value and associated counters, along with a function which takes a
+   window and checks for a match. This then builds the sliding window,
+   pipelines it, and then runs it through the provided function to check for a
+   match. *)
 let make_sliding_window
   scope
-  ~clock
+  ~(* Width and height are static values *)
+   clock
   ~clear
   ~width
   ~height
-  ~(check_fn : Signal.t list list -> Signal.t)
-  ~row_counter
+  ~(* The function used to determine if a given window
+      matches the expected image *)
+  (check_fn : Signal.t list list -> Signal.t)
+  ~(* Grid width is based on the dimension of the inputted grid/image *)
+   row_counter
   ~col_counter
   ~grid_width
-  (value_in : _ With_valid.t)
+  (* Input the image one pixel at a time *)
+    (value_in : _ With_valid.t)
   =
   let spec = Reg_spec.create ~clock ~clear () in
+  (* We rely on the synthesizer to not duplicate the shift register between calls to this function *)
   let shift_reg =
     make_shreg ~n:(max_width * height) ~spec ~enable:value_in.valid value_in.value
   in
@@ -63,6 +75,8 @@ let make_sliding_window
   let window =
     List.init height ~f:(fun i ->
       List.init width ~f:(fun j ->
+        (* For each pixel in the sliding window, use the measured grid width
+           and a wide mux to find that pixel in the shift register *)
         let signal, depth' =
           recursive_mux
             ~spec
@@ -75,6 +89,9 @@ let make_sliding_window
   let%hw window_valid =
     value_in.valid &: (row_counter >=:. height - 1) &: (col_counter >=:. width - 1)
   in
+  (* Apply the provided check function to the window, and combine its result
+     with whether the window is valid (i.e. fully within the area of the
+     image), and match the pipeline depths of all of the components. *)
   pipeline spec ~n:(!depth + 2) window_valid
   &: check_fn (window |> List.map ~f:(List.map ~f:(pipeline spec ~n:2)))
 ;;
@@ -87,6 +104,7 @@ let window_to_rev_diag window =
   window |> List.rev |> List.mapi ~f:(fun i line -> List.nth_exn line i)
 ;;
 
+(* Try to match the given list against the pattern in both directions *)
 let list_match_reversible ~clock ~clear ~pattern list =
   let match_forward = List.map2_exn list pattern ~f:Signal.( ==:. ) |> reduce ~f:( &: ) in
   let match_backward =
@@ -138,6 +156,8 @@ let create
       ; value = signal_to_xmas uart_rx.value
       }
   in
+  (* For each possible orientation (horizontal, vertical, and both diagonals,
+     build a sliding window to check for the XMAS. *)
   let part1_count =
     [ (* Horizontal *)
       make_sliding_window ~width:4 ~height:1 ~check_fn:(fun window ->
@@ -174,6 +194,8 @@ let create
     ]
     |> reduce ~f:Uop.( +: )
   in
+  (* There's several possible orientations in which the X-shaped MAS can match,
+     check all of them. *)
   let part2_count =
     make_sliding_window ~width:3 ~height:3 ~check_fn:(fun window ->
       match window with

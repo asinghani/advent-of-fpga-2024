@@ -74,6 +74,8 @@ let create
                 (ram_zero_counter.value >=:. (max_page_num * max_page_num) + 128)
                 [ sm.set_next Load_rules1 ]
             ] )
+          (* Load the rules by reading two values from the input, and setting the
+             indexed bit in the RAM. *)
         ; ( Load_rules1
           , [ when_
                 uart_rx.valid
