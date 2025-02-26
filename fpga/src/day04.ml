@@ -11,6 +11,8 @@ let max_width = 1 lsl max_width_bits
 (* Collapse the chars XMAS down to a 2-bit value *)
 let char_to_xmas char = String.index_exn "XMAS" char
 
+(* Convert the ASCII characters coming over the UART into the associated
+   2-bit value to simplify the later comparisons *)
 let signal_to_xmas char =
   "XMAS"
   |> String.to_list
@@ -24,11 +26,9 @@ let rec make_shreg ~n ~spec ~enable signal =
   | _ -> signal :: make_shreg ~n:(n - 1) ~spec ~enable (reg spec ~enable signal)
 ;;
 
-(* Mux with a register between each level of the mux tree. This is incredibly
-   inefficient but is the only good way to allow supporting any arbitrary width
-   of a grid (which requires a very wide multiplexer to do in a streaming
-   fashion), while still managing to fit on the ECP5's constrained routing
-   resources. *)
+(* Mux with a register between each level of the mux tree, this allows us to
+   support arbitrary widths while still remaining within the ECP5's limited 
+   logic and routing resources. *)
 let rec recursive_mux ~spec ~sel list =
   let _ = spec in
   assert (List.length list = 1 lsl width sel);
@@ -51,16 +51,16 @@ let rec recursive_mux ~spec ~sel list =
    match. *)
 let make_sliding_window
   scope
-  ~(* Width and height are static values *)
-   clock
+  (* Width and height are static values *)
+  ~clock
   ~clear
   ~width
   ~height
-  ~(* The function used to determine if a given window
-      matches the expected image *)
-  (check_fn : Signal.t list list -> Signal.t)
-  ~(* Grid width is based on the dimension of the inputted grid/image *)
-   row_counter
+  (* The function used to determine if a given window
+     matches the expected image *)
+  ~(check_fn : Signal.t list list -> Signal.t)
+  (* Grid width is based on the dimension of the inputted grid/image *)
+  ~row_counter
   ~col_counter
   ~grid_width
   (* Input the image one pixel at a time *)
